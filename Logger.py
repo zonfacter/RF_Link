@@ -25,8 +25,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 
-__version__ = "2.0.0"
+__version__ = "2.2.0"
 __changelog__ = [
+    {"version": "2.2.0", "date": "2026-01-13", "author": "Assistant",
+     "description": "Fixed ShutterRemotePlugin bit structure, added QRFDEBUG support, plugin toggle UI"},
+    {"version": "2.1.0", "date": "2026-01-13", "author": "Assistant",
+     "description": "Added ShutterRemotePlugin for 40-bit PWM roller shutter remotes"},
     {"version": "2.0.0", "date": "2026-01-13", "author": "Assistant",
      "description": "Added RFLink protocol support, plugin system, device tracking"},
     {"version": "1.4.0", "date": "2026-01-13", "author": "Assistant",
@@ -252,6 +256,220 @@ class DebugPlugin(PluginBase):
                     result["max_pulse"] = max(pulses)
         
         return result
+
+
+class ShutterRemotePlugin(PluginBase):
+    """
+    Plugin für Rollladen-Funkfernbedienungen.
+    Dekodiert 40-bit PWM Protokoll aus RFDEBUG/QRFDEBUG Pulsen.
+    
+    Korrigierte Protokoll-Struktur (40 Bits):
+    ┌────────────────────────┬──────────┬──────────┬──────────┬──────────┐
+    │ Remote ID              │ Channel  │ Type     │ COMMAND  │ Checksum │
+    │ 24 Bits (0-23)         │ 4 Bits   │ 4 Bits   │ 4 Bits   │ 4 Bits   │
+    │                        │ (24-27)  │ (28-31)  │ (32-35)  │ (36-39)  │
+    └────────────────────────┴──────────┴──────────┴──────────┴──────────┘
+    
+    Timing: Sync ~2400µs, Bit0: Kurz-Lang, Bit1: Lang-Kurz
+    """
+    
+    name = "Shutter Remote"
+    description = "Dekodiert Rollladen-Funkfernbedienungen (40-bit PWM)"
+    version = "1.1.0"
+    
+    # Timing-Konstanten (µs)
+    SYNC_MIN, SYNC_MAX = 2200, 2500
+    SHORT_MIN, SHORT_MAX = 350, 600
+    LONG_MIN, LONG_MAX = 900, 1200
+    END_MIN = 5000
+    
+    # Korrigierte Befehle (Bits 32-35)
+    COMMANDS = {
+        0x1: "UP",
+        0x2: "STOP", 
+        0x3: "DOWN",
+        0x8: "PROG",
+    }
+    
+    def __init__(self, sniffer: "RS485Sniffer"):
+        super().__init__(sniffer)
+        self.learned_remotes: Dict[int, str] = {}  # remote_id -> name
+        self.learned_commands: Dict[str, str] = {}  # bits -> name
+        self.channel_mapping: Dict[int, Dict[int, int]] = {}  # remote_id -> {internal: label}
+        self.last_decoded = None
+        self.decode_count = 0
+    
+    def process_message(self, msg: RFLinkMessage) -> Optional[Dict[str, Any]]:
+        """Verarbeitet DEBUG-Nachrichten und dekodiert Rollladen-Befehle."""
+        if not self.enabled:
+            return None
+        
+        # Nur DEBUG-Nachrichten mit Pulsen verarbeiten
+        if msg.protocol not in ("DEBUG", "RFDEBUG", "RFUDEBUG", "QRFDEBUG"):
+            return None
+        
+        if "Pulses" not in msg.raw:
+            return None
+        
+        # Pulse extrahieren (RFDEBUG oder QRFDEBUG Format)
+        pulses = self._extract_pulses(msg.raw)
+        if not pulses or not (78 <= len(pulses) <= 86):
+            return None
+        
+        # Dekodieren
+        result = self._decode_pulses(pulses)
+        if result:
+            self.decode_count += 1
+            self.last_decoded = result
+            return result
+        
+        return None
+    
+    def _extract_pulses(self, raw: str) -> Optional[List[int]]:
+        """Extrahiert Pulse aus Raw-String (RFDEBUG oder QRFDEBUG Format)."""
+        # Versuche RFDEBUG Format (Dezimal, kommagetrennt)
+        match = re.search(r"Pulses\(uSec\)=([0-9,]+)", raw)
+        if match:
+            try:
+                return [int(p) for p in match.group(1).split(",")]
+            except ValueError:
+                pass
+        
+        # Versuche QRFDEBUG Format (Hex-Bytes, jedes Byte × 30µs)
+        match = re.search(r"Pulses\(uSec\)=([0-9a-fA-F]+)", raw)
+        if match:
+            hex_string = match.group(1)
+            try:
+                pulses = []
+                for i in range(0, len(hex_string) - 1, 2):
+                    byte_val = int(hex_string[i:i+2], 16)
+                    pulses.append(byte_val * 30)  # Multiplikator 30µs
+                return pulses
+            except ValueError:
+                pass
+        
+        return None
+    
+    def _decode_pulses(self, pulses: List[int]) -> Optional[Dict[str, Any]]:
+        """Dekodiert Pulse zu Rollladen-Befehl."""
+        # Finde Sync-Puls
+        sync_idx = -1
+        for i in range(min(5, len(pulses))):
+            if self.SYNC_MIN <= pulses[i] <= self.SYNC_MAX:
+                sync_idx = i
+                break
+        
+        if sync_idx < 0:
+            for i in range(min(5, len(pulses))):
+                if pulses[i] > 2000:
+                    sync_idx = i
+                    break
+        
+        if sync_idx < 0:
+            return None
+        
+        # Datenpulse extrahieren
+        data_pulses = pulses[sync_idx + 1:]
+        if data_pulses and data_pulses[-1] >= self.END_MIN:
+            data_pulses = data_pulses[:-1]
+        
+        # Bits dekodieren
+        bits = []
+        for i in range(0, len(data_pulses) - 1, 2):
+            p1, p2 = data_pulses[i], data_pulses[i + 1]
+            
+            p1_short = self.SHORT_MIN <= p1 <= self.SHORT_MAX
+            p1_long = self.LONG_MIN <= p1 <= self.LONG_MAX
+            
+            if p1_long:
+                bits.append('1')
+            elif p1_short:
+                bits.append('0')
+            else:
+                bits.append('1' if p1 > p2 else '0')
+        
+        if len(bits) < 36:
+            return None
+        
+        bit_string = ''.join(bits)
+        while len(bit_string) < 40:
+            bit_string += '0'
+        bit_string = bit_string[:40]
+        
+        # KORRIGIERTE Felder parsen
+        try:
+            remote_id = int(bit_string[0:24], 2)
+            channel_internal = int(bit_string[24:28], 2)
+            type_field = int(bit_string[28:32], 2)
+            command_code = int(bit_string[32:36], 2)  # KORRIGIERT: Bits 32-35!
+            checksum = int(bit_string[36:40], 2)      # KORRIGIERT: Bits 36-39!
+        except ValueError:
+            return None
+        
+        # Kanal-Label ermitteln (Mapping oder Heuristik: Label = Internal - 1)
+        channel_label = channel_internal - 1 if channel_internal > 0 else channel_internal
+        if remote_id in self.channel_mapping:
+            mapping = self.channel_mapping[remote_id]
+            if str(channel_internal) in mapping:
+                channel_label = mapping[str(channel_internal)]
+        
+        # Befehlsname ermitteln
+        command_name = self.COMMANDS.get(command_code, f"CMD_{command_code:X}")
+        if bit_string in self.learned_commands:
+            command_name = self.learned_commands[bit_string]
+        
+        # Remote-Name
+        remote_name = self.learned_remotes.get(remote_id, "Unknown")
+        
+        return {
+            "type": "shutter",
+            "protocol": "ShutterRemote40",
+            "remote_id": f"0x{remote_id:06X}",
+            "remote_name": remote_name,
+            "channel": channel_label,
+            "channel_internal": channel_internal,
+            "command": command_name,
+            "command_code": f"0x{command_code:X}",
+            "type_field": f"0x{type_field:X}",
+            "checksum": f"0x{checksum:X}",
+            "bits": bit_string,
+        }
+    
+    def learn_remote(self, remote_id: int, name: str) -> None:
+        """Lernt einen Remote-Namen."""
+        self.learned_remotes[remote_id] = name
+    
+    def learn_command(self, bits: str, name: str) -> None:
+        """Lernt einen Befehlsnamen."""
+        self.learned_commands[bits] = name.upper()
+    
+    def learn_channel(self, remote_id: int, internal: int, label: int) -> None:
+        """Lernt ein Kanal-Mapping."""
+        if remote_id not in self.channel_mapping:
+            self.channel_mapping[remote_id] = {}
+        self.channel_mapping[remote_id][str(internal)] = label
+    
+    def generate_pulses(self, remote_id: int, channel: int, command: str) -> List[int]:
+        """Generiert Pulse zum Senden mit korrigierter Struktur."""
+        # Korrigierte Befehls-Codes (Bits 32-35)
+        cmd_codes = {'UP': 0x1, 'STOP': 0x2, 'DOWN': 0x3, 'PROG': 0x8}
+        command_code = cmd_codes.get(command.upper(), 0x2)
+        channel_internal = channel + 1
+        type_field = 0x3  # Konstant
+        checksum = 0x0    # TODO: Checksum-Algorithmus ermitteln
+        
+        # Korrigierte Bit-Struktur: [Remote:24][Channel:4][Type:4][Command:4][Check:4]
+        bits = f"{remote_id:024b}{channel_internal:04b}{type_field:04b}{command_code:04b}{checksum:04b}"
+        
+        pulses = [700, 2400]  # Preamble + Sync
+        for bit in bits:
+            if bit == '1':
+                pulses.extend([1050, 450])
+            else:
+                pulses.extend([450, 1050])
+        pulses.append(7000)  # End
+        
+        return pulses
 
 
 # =============================================================================
@@ -498,6 +716,7 @@ class RS485Sniffer:
         self.register_plugin(WeatherPlugin(self))
         self.register_plugin(SwitchPlugin(self))
         self.register_plugin(DebugPlugin(self))
+        self.register_plugin(ShutterRemotePlugin(self))
 
     def register_plugin(self, plugin: PluginBase) -> None:
         """Register a plugin."""
@@ -581,9 +800,25 @@ class RS485Sniffer:
         # Direction indicator
         direction = "◀" if msg.node == "20" else "▶"
         
-        # Build field display
+        # Check for Shutter Remote plugin result
+        shutter_result = msg.fields.get("_plugin_Shutter Remote")
+        if shutter_result and shutter_result.get("type") == "shutter":
+            # Format Shutter command nicely
+            remote = shutter_result.get("remote_id", "?")
+            channel = shutter_result.get("channel", "?")
+            command = shutter_result.get("command", "?")
+            return f"{ts} 🏠 [SHUTTER] Remote:{remote} CH{channel} → {command}"
+        
+        # Build field display for other messages
         field_parts = []
         for key, value in msg.fields.items():
+            if key.startswith("_plugin_"):
+                # Format plugin output
+                plugin_name = key.replace("_plugin_", "")
+                if isinstance(value, dict):
+                    plugin_parts = [f"{k}={v}" for k, v in value.items() if not k.startswith("_")]
+                    field_parts.append(f"_{plugin_name} Output={{{', '.join(plugin_parts[:5])}}}")
+                continue
             formatted = self.rflink_parser.format_value(key, value)
             field_parts.append(f"{key}={formatted}")
         
@@ -594,7 +829,7 @@ class RS485Sniffer:
     def process_rflink_message(self, msg: RFLinkMessage) -> None:
         """Process an RFLink message through plugins and update devices."""
         
-        # Update device tracking
+        # Update device tracking for standard RFLink messages
         if "ID" in msg.fields:
             device_id = str(msg.fields["ID"])
             switch = str(msg.fields.get("SWITCH", ""))
@@ -627,6 +862,31 @@ class RS485Sniffer:
                     result = plugin.process_message(msg)
                     if result:
                         msg.fields.update({f"_plugin_{name}": result})
+                        
+                        # Track Shutter Remote devices
+                        if name == "Shutter Remote" and result.get("type") == "shutter":
+                            remote_id = result.get("remote_id", "?")
+                            channel = result.get("channel", "?")
+                            command = result.get("command", "?")
+                            
+                            device = RFLinkDevice(
+                                protocol="ShutterRemote",
+                                device_id=remote_id,
+                                switch=f"CH{channel}",
+                                last_seen=msg.timestamp,
+                                last_cmd=command,
+                                message_count=1
+                            )
+                            
+                            key = device.unique_id
+                            if key in self.rflink_devices:
+                                device.message_count = self.rflink_devices[key].message_count + 1
+                                device.values = self.rflink_devices[key].values.copy()
+                            
+                            device.values["command"] = command
+                            device.values["bits"] = result.get("bits", "")[:16] + "..."
+                            self.rflink_devices[key] = device
+                            
                 except Exception as e:
                     self.debug_print(f"Plugin {name} error: {e}")
         
@@ -1278,6 +1538,21 @@ class SnifferGUI:
         
         self.plugin_tree.pack(fill="both", expand=True, padx=5, pady=5)
         
+        # Plugin control buttons
+        plugin_btn_frame = ttk.Frame(plugin_list_frame)
+        plugin_btn_frame.pack(fill="x", padx=5, pady=5)
+        
+        ttk.Button(plugin_btn_frame, text="Plugin Ein/Aus", 
+                   command=self.toggle_selected_plugin).pack(side="left", padx=5)
+        ttk.Button(plugin_btn_frame, text="Aktualisieren", 
+                   command=self.update_plugin_list).pack(side="left", padx=5)
+        
+        ttk.Label(plugin_btn_frame, text="Doppelklick oder Button zum Ein-/Ausschalten",
+                  foreground="gray").pack(side="right", padx=5)
+        
+        # Double-click to toggle
+        self.plugin_tree.bind("<Double-1>", lambda e: self.toggle_selected_plugin())
+        
         # Populate plugin list
         self.update_plugin_list()
         
@@ -1288,12 +1563,14 @@ class SnifferGUI:
         info_text = """
 Das Plugin-System ermöglicht die Erweiterung des Sniffers.
 
-Verfügbare Plugin-Typen:
+Verfügbare Plugins:
 • Weather Sensors - Verarbeitet Wetterdaten (Temperatur, Luftfeuchtigkeit, Wind, Regen)
 • Switches & Remotes - Verarbeitet Schalter- und Fernbedienungssignale
 • Debug Output - Verarbeitet RFDEBUG/RFUDEBUG Ausgaben
+• Shutter Remote - Dekodiert Rollladen-Funkfernbedienungen (40-bit PWM)
 
-Eigene Plugins können durch Ableitung von PluginBase erstellt werden.
+Plugins können durch Doppelklick oder den Button "Plugin Ein/Aus" aktiviert/deaktiviert werden.
+Um DEBUG-Nachrichten ohne Dekodierung zu sehen, deaktiviere das "Shutter Remote" Plugin.
         """
         ttk.Label(info_frame, text=info_text, justify="left").pack(padx=10, pady=10)
 
@@ -1378,6 +1655,30 @@ WINDRICHTUNG:
                 plugin.description,
                 "✓" if plugin.enabled else "✗"
             ))
+    
+    def toggle_selected_plugin(self) -> None:
+        """Toggle the enabled state of the selected plugin."""
+        selection = self.plugin_tree.selection()
+        if not selection:
+            messagebox.showinfo("Info", "Bitte wähle ein Plugin aus der Liste")
+            return
+        
+        item = selection[0]
+        values = self.plugin_tree.item(item, "values")
+        if not values:
+            return
+        
+        plugin_name = values[0]
+        
+        # Find plugin and toggle
+        for name, plugin in self.sniffer.plugins.items():
+            if plugin.name == plugin_name:
+                plugin.enabled = not plugin.enabled
+                status = "aktiviert" if plugin.enabled else "deaktiviert"
+                self.queue_msg(f"Plugin '{plugin_name}' {status}")
+                break
+        
+        self.update_plugin_list()
 
     def update_device_tree(self) -> None:
         """Update the device tree display."""
