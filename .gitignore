@@ -1,0 +1,21 @@
+.venv-test/
+__pycache__/
+*.pyc
+rflink_test_settings.json
+testprogramm_logs/
+
+# Local hardware, deployment and generated files
+firmware/.pio/
+firmware/.pio-core/
+firmware/tests/build/
+firmware/build-validation.log
+iobroker/adapter/
+iobroker/*.tgz
+iobroker/*_result.json
+iobroker/*_discovery.json
+iobroker/*_diagnosis.json
+iobroker/*_verification.json
+iobroker/*_deployment.json
+iobroker/*_objects.json
+iobroker/bridge_before_update.json
+iobroker/adapter_main_before_fixed_buttons.js

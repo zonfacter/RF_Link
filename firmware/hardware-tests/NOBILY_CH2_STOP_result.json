@@ -1,0 +1,8 @@
+{
+  "selected_channel": 2,
+  "button": "STOP",
+  "capture": "capture_20261012_203317.jsonl",
+  "decoded": {
+    "ShutterRemote40;ID=98461A;SWITCH=02;CHANNELBYTE=42;RAW=55;CMD=STOP;": 3
+  }
+}

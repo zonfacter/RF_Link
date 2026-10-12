@@ -1,0 +1,68 @@
+{
+  "remote_id": "98461A",
+  "channels": {
+    "1": {
+      "channel_byte": "41",
+      "rx_confirmed": true,
+      "tx_up_confirmed": true,
+      "tx_down_confirmed": true,
+      "tx_stop_confirmed": true
+    },
+    "3": {
+      "channel_byte": "43",
+      "rx_confirmed": true,
+      "rx_stop_count": 3,
+      "tx_sequence": "DOWN STOP UP STOP",
+      "tx_observation_pending": false,
+      "tx_up_confirmed": true,
+      "tx_down_confirmed": true,
+      "tx_stop_confirmed": true,
+      "only_target_motor_confirmed": true
+    },
+    "4": {
+      "channel_byte": "44",
+      "rx_confirmed": true,
+      "rx_stop_count": 3,
+      "tx_observation_pending": false,
+      "tx_up_confirmed": true,
+      "tx_stop_confirmed": true,
+      "tx_down_confirmed": null,
+      "note": "User confirmed UP and STOP on repeat. DOWN response from first sequence has not been explicitly confirmed."
+    },
+    "5": {
+      "group": false,
+      "channel_byte": "45",
+      "rx_confirmed": true,
+      "rx_stop_count": 3,
+      "tx_observation_pending": false,
+      "individual_motor": true,
+      "tx_movement_confirmed": true,
+      "note": "User corrected earlier description: channel 5 controls one motor. Movement confirmed; both directions and STOP not individually stated in latest response."
+    },
+    "2": {
+      "channel_byte": "42",
+      "rx_confirmed": true,
+      "tx_sequence": "UP STOP DOWN STOP",
+      "tx_observation_pending": false,
+      "tx_down_confirmed": true,
+      "tx_stop_confirmed": true,
+      "tx_up_confirmed": true,
+      "note": "UP, DOWN and STOP confirmed by user; UP retested after leaving upper end position."
+    }
+  },
+  "all_channels": {
+    "group": true,
+    "channel_byte": "40",
+    "rx_confirmed": true,
+    "tx_confirmed": true,
+    "note": "Separate remote selection for all channels; mapping pending.",
+    "rx_stop_count": 3,
+    "tx_observation_pending": false,
+    "tx_up_confirmed": true,
+    "tx_down_confirmed": true,
+    "tx_stop_confirmed": true,
+    "all_assigned_motors_confirmed": true
+  },
+  "configuration_note": "Channels 1-5 are individual selections. A separate all-channel function exists; earlier assumption that channel 5 was group was incorrect.",
+  "summary": "Individual selections 1-5 mapped and exercised. All-channel selection 40 confirmed by user for UP, DOWN and STOP on all assigned motors. Detailed per-direction individual feedback retained separately."
+}

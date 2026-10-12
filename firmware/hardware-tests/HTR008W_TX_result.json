@@ -1,0 +1,10 @@
+{
+  "remote": "HTR008W",
+  "mode": "learned pulse fingerprints and captured main-packet replay",
+  "motor_up_confirmed_by_user": true,
+  "motor_stop_confirmed_by_user": true,
+  "motor_down_confirmed_by_user": true,
+  "capture": "capture_20261012_203317.jsonl",
+  "scope": "The recorded remote and its selected channel. Generic manufacturer IDs/channel mapping and rolling-code interpretation are not established.",
+  "down_test_note": "User confirmed downward movement after repeat DOWN -> STOP. STOP independently confirmed during earlier UP -> STOP test."
+}

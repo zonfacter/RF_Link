@@ -1,0 +1,11 @@
+{
+  "remote": "Nobily PR/PRE",
+  "button": "STOP",
+  "selected_channel": 1,
+  "decoded": {
+    "ShutterRemote40;ID=98461A;SWITCH=00;CHANNELBYTE=40;RAW=11;CMD=UP;": 1,
+    "ShutterRemote40;ID=98461A;SWITCH=00;CHANNELBYTE=40;RAW=1E;CMD=UNKNOWN;": 1,
+    "ShutterRemote40;ID=98461A;SWITCH=01;CHANNELBYTE=41;RAW=55;CMD=STOP;": 3
+  },
+  "capture": "capture_20261012_195742.jsonl"
+}

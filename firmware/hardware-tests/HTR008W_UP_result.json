@@ -1,0 +1,78 @@
+{
+  "remote": "HTR008W",
+  "button": "UP",
+  "capture": "capture_20261012_201834.jsonl",
+  "packets": [
+    {
+      "time": "2026-10-12T20:21:43.045171+02:00",
+      "pulse_count": 60,
+      "frame_width_patterns": []
+    },
+    {
+      "time": "2026-10-12T20:21:43.179992+02:00",
+      "pulse_count": 34,
+      "frame_width_patterns": []
+    },
+    {
+      "time": "2026-10-12T20:21:43.331379+02:00",
+      "pulse_count": 24,
+      "frame_width_patterns": []
+    },
+    {
+      "time": "2026-10-12T20:25:59.107598+02:00",
+      "pulse_count": 20,
+      "frame_width_patterns": []
+    },
+    {
+      "time": "2026-10-12T20:25:59.230693+02:00",
+      "pulse_count": 38,
+      "frame_width_patterns": []
+    },
+    {
+      "time": "2026-10-12T20:25:59.324814+02:00",
+      "pulse_count": 24,
+      "frame_width_patterns": []
+    },
+    {
+      "time": "2026-10-12T20:27:12.445257+02:00",
+      "pulse_count": 152,
+      "frame_width_patterns": [
+        "0100000011000000000000001100000011011011100101110100000010001100100000",
+        "0100000011000000000000001100000011011011100101110100000010001100100000"
+      ]
+    },
+    {
+      "time": "2026-10-12T20:27:12.650025+02:00",
+      "pulse_count": 60,
+      "frame_width_patterns": []
+    },
+    {
+      "time": "2026-10-12T20:27:14.796248+02:00",
+      "pulse_count": 152,
+      "frame_width_patterns": [
+        "0000000011000000010000001000000010011011110101110000000011101100100100",
+        "0000000011000000010000001000000010011011110101110000000011101100100100"
+      ]
+    },
+    {
+      "time": "2026-10-12T20:27:14.985053+02:00",
+      "pulse_count": 46,
+      "frame_width_patterns": []
+    },
+    {
+      "time": "2026-10-12T20:27:17.479090+02:00",
+      "pulse_count": 152,
+      "frame_width_patterns": [
+        "0100000011000000000000001100000011011011100101110100000010001100100000",
+        "0100000011000000000000001100000011011011100101110100000010001100100000"
+      ]
+    },
+    {
+      "time": "2026-10-12T20:27:17.684100+02:00",
+      "pulse_count": 60,
+      "frame_width_patterns": []
+    }
+  ],
+  "complete_main_packets": 3,
+  "note": "Three full main packets captured, each with two repeated 70-pulse subframes; additional partial follow-up packets retained in raw capture. Command field not yet established."
+}

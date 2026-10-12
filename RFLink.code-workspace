@@ -1,0 +1,7 @@
+{
+  "folders": [
+    { "name": "RFLink Firmware", "path": "firmware" },
+    { "name": "Logger und Mitschnitte", "path": "." }
+  ],
+  "extensions": { "recommendations": ["platformio.platformio-ide", "ms-python.python"] }
+}

@@ -1,0 +1,26 @@
+{
+  "remote": "Nobily PR/PRE",
+  "id": "98461A",
+  "channel": 1,
+  "channel_byte": "41",
+  "rx_confirmed": {
+    "UP": "11",
+    "DOWN": "33",
+    "STOP": "55"
+  },
+  "tx_test": "UP followed by STOP",
+  "motor_movement_confirmed_by_user": true,
+  "stop_response_confirmed_by_user": true,
+  "tx_pulses_us": {
+    "header_high": 4800,
+    "header_low": 1470,
+    "short": 300,
+    "long": 660,
+    "gap": 6990
+  },
+  "repeats": 6,
+  "capture": "capture_20261012_201834.jsonl",
+  "finding": "Initial TX based on loop-count RFDEBUG durations failed. Corrected physical timings and longer startup mark produced motor movement.",
+  "motor_down_confirmed_by_user": true,
+  "down_stop_response_confirmed_by_user": true
+}

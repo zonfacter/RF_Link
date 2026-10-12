@@ -1,0 +1,74 @@
+RFLink - Bedienung und externe Gerätezuordnung
+Stand: 12.10.2026; Firmware BUILD 0A, REV 33
+
+ARCHITEKTUR
+Die Firmware decodiert unterstützte Funktelegramme und liefert Protokoll,
+Gerätekennung, Kanal und Befehl seriell. Sendebefehle werden in Funktelegramme
+umgesetzt. Namen, Räume und Gerätezuordnungen liegen extern auf dem Laptop
+oder in ioBroker. BUILD 0A enthält keine zusätzliche EEPROM-Lernfunktion.
+Ein unbekanntes Funkprotokoll benötigt weiterhin einen passenden Decoder.
+
+LAPTOP-TESTPROGRAMM
+Python 3 mit Tkinter installieren und im Projektordner einmalig ausführen:
+python -m venv .venv-test
+.venv-test\Scripts\python.exe -m pip install -r requirements-testprogramm.txt
+Danach start.cmd doppelklicken, den Mega-Port wählen und verbinden.
+Seriell: 57600 Baud, LF. Nur eine Anwendung darf den Port gleichzeitig öffnen.
+Fernbedienung drücken, "Letzten Empfang uebernehmen" wählen, Namen eingeben
+und "Zuordnung lokal speichern". Speicherung nur in rflink_test_settings.json.
+HOCH, STOP und RUNTER senden. Automatischer STOP ist zunächst auf 2 s gesetzt.
+OK bestätigt den Mega, nicht die Motorreaktion. JSONL-Export unterstützt
+die weitere Analyse.
+
+NOBILY / BREL
+Protokoll ShutterRemote40: echte 24-Bit-Geräte-ID aus dem Telegramm.
+Getestete ID 98461A. Kanal 1-5 entspricht SWITCH 41-45 (Hex).
+SWITCH 40 wählt alle Kanäle; Kanal 5 ist ein Einzelmotor.
+Beispiel Empfang:
+20;01;ShutterRemote40;ID=98461A;SWITCH=41;CHANNELBYTE=41;RAW=11;CMD=UP;
+Beispiel Senden:
+10;ShutterRemote40;98461A;41;UP;
+10;ShutterRemote40;98461A;41;STOP;
+10;ShutterRemote40;98461A;41;DOWN;
+
+HTR008W
+Empfang und Senden funktionieren für das am Motor getestete Fernbedienungsprofil.
+ID 000001 ist ein lokaler Alias, keine aus dem Telegramm gelesene Geräte-ID.
+Die allgemeine Gerätekennung und weitere HTR008W müssen noch analysiert werden.
+Der Decoder kann verschiedene HTR-Fernbedienungen bisher nicht sicher trennen.
+10;HTR008W;000001;00;UP;
+10;HTR008W;000001;00;STOP;
+10;HTR008W;000001;00;DOWN;
+
+IOBROKER-ADAPTER-FORK
+Quellcode: https://github.com/zonfacter/ioBroker.rflink
+Version: 2.1.13-rfbuttons.2, basierend auf Originaladapter 2.1.12.
+Paket: https://github.com/zonfacter/ioBroker.rflink/releases/tag/v2.1.13-rfbuttons.2
+Wartung: https://github.com/zonfacter/ioBroker.rflink/blob/master/FORK.md
+Vorhandene und neu aufgenommene Rollladenkanäle erhalten automatisch getrennte
+UP_<Kanal>-, STOP_<Kanal>- und DOWN_<Kanal>-Tasten unter rflink.0.channels.
+Die schon vorhandenen kurzen HTR-Namen bleiben erhalten:
+rflink.0.channels.HTR008W_1.UP
+rflink.0.channels.HTR008W_1.STOP
+rflink.0.channels.HTR008W_1.DOWN
+Auslösen mit true und ack=false. Nach fehlerfreiem seriellen Schreiben wird
+die Taste auf false mit ack=true zurückgesetzt. Das bestätigt keine Motorreaktion.
+Für neue Geräte den ioBroker-Aufnahmemodus aktivieren und ein echtes Telegramm
+empfangen. Danach den Aufnahmemodus wieder deaktivieren.
+Automatische RFLink-Updates auf none setzen. Offizielle manuelle Updates
+ersetzen den Fork; neue Originaländerungen gezielt übernehmen und versionieren.
+Alte BrelMotor-Objekte senden weiter BrelMotor. Unsere Firmware verwendet
+ShutterRemote40; Nobily bei Bedarf unter dem aktuellen Protokoll neu aufnehmen.
+
+OPTIONALE BRIDGE
+iobroker/RFLink_bridge.js legt ergänzende Tasten sowie lastCommand und lastSeen
+unter 0_userdata.0.RFLink an. Diese Empfangsanzeigen zeigen keine Motorposition.
+Die direkten Tasten des Adapter-Forks benötigen die Bridge nicht.
+
+VALIDIERUNG
+BUILD 0A wurde auf beiden verwendeten Megas installiert; Flash-Verifikation,
+VERSION und PING waren erfolgreich. Empfang wurde vom Nutzer bestätigt.
+Motorreaktionen für Nobily und HTR wurden direkt getestet; Nachweise stehen
+unter firmware/hardware-tests. Die Motorreaktion über die neuen direkten
+ioBroker-Tasten ist noch separat zu bestätigen.
+Adaptertests auf Node 20, 22 und 24 sowie Neustarttest bestanden.

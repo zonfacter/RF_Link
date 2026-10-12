@@ -1,0 +1,15 @@
+{
+  "button": "NOBILY_CH1_STOP",
+  "paired_frames": 3,
+  "real_sync_us": [
+    1464,
+    1464,
+    1456
+  ],
+  "legacy_sync_us": [
+    2310,
+    2310,
+    2280
+  ],
+  "finding": "Legacy loop-count timing overestimates actual duration; measured data pulses approx 268-304 / 628-684 us."
+}

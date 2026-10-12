@@ -1,0 +1,10 @@
+{
+  "remote": "Nobily PR/PRE",
+  "id": "98461A",
+  "channel_byte": "40",
+  "button": "STOP",
+  "command_hex": "55",
+  "decoded_messages": 4,
+  "capture": "capture_20261012_195742.jsonl",
+  "channel_label_on_remote": "not yet confirmed"
+}

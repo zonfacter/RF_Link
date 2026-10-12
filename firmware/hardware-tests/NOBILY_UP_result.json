@@ -1,0 +1,10 @@
+{
+  "remote": "Nobily PR/PRE",
+  "button": "UP",
+  "decoded": {
+    "ShutterRemote40;ID=98461A;SWITCH=00;CHANNELBYTE=40;RAW=11;CMD=UP;": 4,
+    "ShutterRemote40;ID=98461A;SWITCH=00;CHANNELBYTE=40;RAW=1E;CMD=UNKNOWN;": 4
+  },
+  "capture": "capture_20261012_195742.jsonl",
+  "channel_label_on_remote": "not yet confirmed"
+}
