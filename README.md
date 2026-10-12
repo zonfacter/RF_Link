@@ -13,6 +13,16 @@ python -m venv .venv-test
 
 Danach **`start.cmd` doppelklicken**, den Mega-Port auswählen und verbinden. Das Testprogramm empfängt Telegramme, bietet HOCH/STOP/RUNTER mit optionalem automatischem STOP und speichert Gerätezuordnungen auf dem Laptop. Schnittstelle: **57600 Baud, LF**.
 
+### Lokale Geräteverwaltung und Aufnahme
+
+Im Reiter **Geräte / Aufnahme** die **Aufnahme / Anlernen starten**. Für 1, 5 oder 15 Minuten, alternativ bis zum manuellen Stoppen, werden neue decodierte Geräte lokal registriert. Thermometer und Feuchtesensoren erscheinen mit ihren aktuellen Messwerten, Gerätekennung, Kanal und Empfangszähler. Bereits bekannte Geräte aktualisieren sich auch nach Ende der Aufnahme.
+
+Gerät auswählen und **Name, Raum und Notiz** speichern. Eine Suche und ein JSON-Export sind vorhanden. Die Liste bleibt in `rflink_devices.json` auf dem Laptop erhalten; es werden keine Gerätezuordnungen in den Mega geschrieben. Vorhandene gespeicherte Steuerziele werden in die Liste übernommen.
+
+Mit **Rohsignale mit aufnehmen** werden zusätzliche Pulsfolgen im Reiter **Rohsignale** angezeigt. Dafür schaltet das Programm während der Aufnahme `RFUDEBUG` und `RFTIMING` ein und anschließend wieder aus. Rohsignaturen sind keine Gerätekennungen; direkt gemessene `TIMING`-Zeilen können auch von bereits bekannten Geräten stammen. Die vollständige Sitzung wird fortlaufend als JSONL unter `testprogramm_logs` gespeichert und kann exportiert werden.
+
+Das Programm zeigt die Geräte, deren Telegramme die vorhandene 433-MHz-Hardware und Firmware empfangen bzw. decodieren. Ein unbekanntes Funkprotokoll wird durch den lokalen Aufnahmemodus nicht automatisch entschlüsselt. Sensoren bekommen keine Rollladen-Sendetasten. Nur unterstützte Rollladenprofile lassen sich als Steuerziel übernehmen.
+
 ## Firmware entwickeln
 
 `RFLink.code-workspace` in **Visual Studio Code** öffnen und PlatformIO installieren. Projekt: `firmware`, Environment: `mega2560`.
@@ -49,6 +59,7 @@ Mit Python 3 und `g++` (bei Bedarf über `CXX` konfigurieren):
 python firmware/tests/run_capture_tests.py
 python firmware/tests/run_htr_capture_tests.py
 .venv-test\Scripts\python.exe firmware/tests/test_testprogramm.py
+python firmware/tests/test_device_registry.py
 node firmware/tests/test_iobroker.js
 node firmware/tests/test_iobroker_bridge.js
 ```

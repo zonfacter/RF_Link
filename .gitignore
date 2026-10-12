@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 rflink_test_settings.json
+rflink_devices.json
+rflink_devices.tmp
 testprogramm_logs/
 
 # Local hardware, deployment and generated files

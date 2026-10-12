@@ -20,6 +20,24 @@ HOCH, STOP und RUNTER senden. Automatischer STOP ist zunächst auf 2 s gesetzt.
 OK bestätigt den Mega, nicht die Motorreaktion. JSONL-Export unterstützt
 die weitere Analyse.
 
+LOKALE GERÄTEVERWALTUNG
+Reiter "Geräte / Aufnahme" öffnen und "Aufnahme / Anlernen starten" wählen.
+Neue decodierte Geräte werden 1, 5 oder 15 Minuten bzw. bis zum Stoppen
+registriert. Bekannte Geräte aktualisieren ihre Werte auch außerhalb der Aufnahme.
+Die Liste zeigt Protokoll, ID, Kanal, Messwerte, letzten Empfang und Zähler.
+Ein Gerät auswählen, Name / Raum / Notiz vergeben und Speichern wählen.
+Speicherung in rflink_devices.json auf dem Laptop; kein Schreiben in den Mega.
+Vorhandene gespeicherte Steuerziele werden in die Liste übernommen.
+Ein JSON-Export und eine Suche sind vorhanden. Sensoren besitzen keine
+Rollladen-Sendetasten. Unterstützte Rollladenprofile können als Steuerziel dienen.
+
+Optional "Rohsignale mit aufnehmen" aktivieren. Dann werden RFUDEBUG und
+RFTIMING während der Aufnahme eingeschaltet; Rohfolgen stehen im eigenen Reiter.
+TIMING kann auch von bekannten Geräten stammen. Die Signatur gruppiert nur
+identische Aufnahmen und ist keine echte Geräte-ID. Unbekannte Protokolle werden
+nicht automatisch entschlüsselt. Thermometer senden oft nur in Intervallen.
+Sitzungen werden fortlaufend unter testprogramm_logs als JSONL geschrieben.
+
 NOBILY / BREL
 Protokoll ShutterRemote40: echte 24-Bit-Geräte-ID aus dem Telegramm.
 Getestete ID 98461A. Kanal 1-5 entspricht SWITCH 41-45 (Hex).

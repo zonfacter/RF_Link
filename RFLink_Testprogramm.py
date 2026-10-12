@@ -1,14 +1,17 @@
 """Laptop control, labelled capture and external device assignment for the custom RFLink firmware."""
 from datetime import datetime
+from collections import deque
 import json
 from pathlib import Path
 import queue
 import threading
 import time
+import shutil
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import serial
 from serial.tools import list_ports
+from rflink_devices import DeviceRegistry, Frame, parse_frame, control_target, measurement_text, raw_signal
 
 ROOT = Path(__file__).resolve().parent
 BUTTONS = {'HOCH': 'UP', 'STOP': 'STOP', 'RUNTER': 'DOWN'}
@@ -30,11 +33,12 @@ def control_command(protocol, device_id, channel, button):
     raise ValueError('Unbekanntes Protokoll')
 
 class App:
-    def __init__(self, root):
+    def __init__(self, root, storage_dir=None):
         self.root = root
+        self.storage_dir = Path(storage_dir) if storage_dir is not None else ROOT
         root.title('RFLink – Testen und Zuordnen')
-        root.geometry('1000x760')
-        root.minsize(850, 650)
+        root.geometry('1120x740')
+        root.minsize(950, 650)
         self.events = queue.Queue()
         self.port = None
         self.ready = False
@@ -42,7 +46,18 @@ class App:
         self.write_lock = threading.Lock()
         self.stop_job = None
         self.stop_command = None
-        self.records = []
+        self.records = deque(maxlen=5000)
+        self.session_path = None
+        self.registry = DeviceRegistry(self.storage_dir / 'rflink_devices.json')
+        self.registry_error = ''
+        try:
+            self.registry.load()
+        except (OSError, ValueError) as exc:
+            self.registry_error = str(exc)
+        self.scanning = False
+        self.scan_deadline = None
+        self.raw_signals = {}
+        self.latest_frame = None
         self.port_var = tk.StringVar(value='COM3')
         self.status = tk.StringVar(value='Nicht verbunden · 57600 Baud')
         self.protocol = tk.StringVar(value='Nobily')
@@ -56,11 +71,23 @@ class App:
         self.profiles = {}
         self.last_received = None
         self.raw = tk.StringVar(value='10;PING;')
+        self.scan_duration = tk.StringVar(value='5 Minuten')
+        self.capture_raw = tk.BooleanVar(value=False)
+        self.device_filter = tk.StringVar()
+        self.device_status = tk.StringVar(value='Aufnahme starten, um neue Geräte lokal zu erfassen. Bekannte Geräte aktualisieren sich bei Empfang.')
+        self.edit_name = tk.StringVar()
+        self.edit_room = tk.StringVar()
+        self.edit_notes = tk.StringVar()
         self.build_ui()
         self.refresh_ports()
         self.restore_settings()
+        self.refresh_ports()
+        self.refresh_device_table()
+        if self.registry_error:
+            self.device_status.set('Gerätedatei konnte nicht geladen werden: ' + self.registry_error)
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(100, self.poll)
+        root.after(1000, self.housekeeping)
 
     def build_ui(self):
         style = ttk.Style()
@@ -80,7 +107,17 @@ class App:
         self.connect_btn = ttk.Button(connection, text='Verbinden', command=self.toggle_connection)
         self.connect_btn.pack(side='left')
         ttk.Button(connection, text='PING', command=lambda: self.send('10;PING;')).pack(side='left', padx=6)
-        controls = ttk.LabelFrame(body, text='Rollladen steuern', padding=12)
+        self.tabs = ttk.Notebook(body)
+        self.tabs.pack(fill='both', expand=True)
+        device_tab = ttk.Frame(self.tabs, padding=10)
+        self.control_tab = ttk.Frame(self.tabs, padding=10)
+        log_tab = ttk.Frame(self.tabs, padding=10)
+        raw_tab = ttk.Frame(self.tabs, padding=10)
+        for frame, title in ((device_tab,'Geräte / Aufnahme'),(self.control_tab,'Steuern'),(log_tab,'Serielles Protokoll'),(raw_tab,'Rohsignale')):
+            self.tabs.add(frame,text=title)
+        self.build_devices_ui(device_tab)
+        self.build_raw_ui(raw_tab)
+        controls = ttk.LabelFrame(self.control_tab, text='Rollladen steuern', padding=12)
         controls.pack(fill='x')
         row = ttk.Frame(controls)
         row.pack(fill='x')
@@ -105,7 +142,7 @@ class App:
         ttk.Checkbutton(row, text='Automatisch STOP nach', variable=self.auto_stop).pack(side='left')
         ttk.Spinbox(row, from_=1, to=30, textvariable=self.seconds, width=5).pack(side='left', padx=6)
         ttk.Label(row, text='Sekunden · OK bestätigt den Mega, nicht die Motorreaktion.').pack(side='left')
-        profiles = ttk.LabelFrame(body, text='Geraete auf dem Laptop zuordnen', padding=12)
+        profiles = ttk.LabelFrame(self.control_tab, text='Steuerziele auf dem Laptop speichern', padding=12)
         profiles.pack(fill='x', pady=12)
         row = ttk.Frame(profiles)
         row.pack(fill='x')
@@ -116,33 +153,272 @@ class App:
         ttk.Button(row, text='Zuordnung lokal speichern', command=self.save_profile).pack(side='left')
         ttk.Label(profiles, textvariable=self.profile_status, wraplength=890).pack(anchor='w', pady=6)
         ttk.Label(profiles, text='Nobily: Geraete-ID aus dem Funktelegramm. HTR008W: 000001 ist ein lokaler Alias fuer die getestete Fernbedienung.', wraplength=890).pack(anchor='w')
-        logging = ttk.Frame(body)
+        logging = ttk.Frame(log_tab)
         logging.pack(fill='x')
         ttk.Label(logging, text='Aufnahme-Label').pack(side='left')
         ttk.Entry(logging, textvariable=self.label, width=26).pack(side='left', padx=6)
         ttk.Button(logging, text='RFDEBUG an', command=lambda: self.send('10;RFDEBUG=ON;')).pack(side='left', padx=3)
         ttk.Button(logging, text='RFDEBUG aus', command=lambda: self.send('10;RFDEBUG=OFF;')).pack(side='left', padx=3)
         ttk.Button(logging, text='Export JSONL', command=self.export).pack(side='right')
-        frame = ttk.Frame(body)
+        frame = ttk.Frame(log_tab)
         frame.pack(fill='both', expand=True, pady=8)
         self.log = tk.Text(frame, font=('Consolas', 10), background='#172233', foreground='#e3edf8', wrap='none', height=9, state='disabled')
         self.log.pack(side='left', fill='both', expand=True)
         scroll = ttk.Scrollbar(frame, command=self.log.yview)
         scroll.pack(side='right', fill='y')
         self.log.configure(yscrollcommand=scroll.set)
-        rawrow = ttk.Frame(body)
+        rawrow = ttk.Frame(log_tab)
         rawrow.pack(fill='x')
         ttk.Entry(rawrow, textvariable=self.raw).pack(side='left', fill='x', expand=True)
         ttk.Button(rawrow, text='Seriellen Befehl senden', command=lambda: self.send(self.raw.get())).pack(side='left', padx=6)
 
+    def build_devices_ui(self, parent):
+        row = ttk.Frame(parent)
+        row.pack(fill='x')
+        self.scan_btn = ttk.Button(row,text='Aufnahme / Anlernen starten',command=self.toggle_scan)
+        self.scan_btn.pack(side='left')
+        ttk.Combobox(row,textvariable=self.scan_duration,values=['1 Minute','5 Minuten','15 Minuten','Bis zum Stoppen'],state='readonly',width=17).pack(side='left',padx=6)
+        ttk.Checkbutton(row,text='Rohsignale mit aufnehmen',variable=self.capture_raw,command=self.scan_options_changed).pack(side='left')
+        ttk.Button(row,text='Geräteliste exportieren',command=self.export_devices).pack(side='right')
+        ttk.Label(parent,textvariable=self.device_status,wraplength=1010).pack(anchor='w',pady=8)
+        row = ttk.Frame(parent)
+        row.pack(fill='x',pady=(0,6))
+        ttk.Label(row,text='Suchen').pack(side='left')
+        ttk.Entry(row,textvariable=self.device_filter,width=32).pack(side='left',padx=6)
+        self.device_filter.trace_add('write',lambda *_:self.refresh_device_table())
+        ttk.Label(row,text='Lokale Zuordnung · keine Speicherung im Mega').pack(side='left',padx=12)
+        frame = ttk.Frame(parent)
+        frame.pack(fill='both',expand=True)
+        columns=('name','type','protocol','id','channel','values','seen','count')
+        self.device_tree = ttk.Treeview(frame,columns=columns,show='headings',selectmode='browse',height=10)
+        for column,title,width in zip(columns,['Name / Raum','Typ','Protokoll','ID','Kanal','Messwerte / Befehl','Letzter Empfang','Anzahl'],[170,110,140,95,65,230,165,65]):
+            self.device_tree.heading(column,text=title)
+            self.device_tree.column(column,width=width,minwidth=55,stretch=column in ('name','values'))
+        self.device_tree.grid(row=0,column=0,sticky='nsew')
+        vertical=ttk.Scrollbar(frame,orient='vertical',command=self.device_tree.yview)
+        vertical.grid(row=0,column=1,sticky='ns')
+        horizontal=ttk.Scrollbar(frame,orient='horizontal',command=self.device_tree.xview)
+        horizontal.grid(row=1,column=0,sticky='ew')
+        self.device_tree.configure(yscrollcommand=vertical.set,xscrollcommand=horizontal.set)
+        frame.rowconfigure(0,weight=1);frame.columnconfigure(0,weight=1)
+        self.device_tree.bind('<<TreeviewSelect>>',self.select_device)
+        row=ttk.Frame(parent);row.pack(fill='x',pady=8)
+        for caption,variable,width in [('Name',self.edit_name,22),('Raum',self.edit_room,18),('Notiz',self.edit_notes,28)]:
+            ttk.Label(row,text=caption).pack(side='left')
+            ttk.Entry(row,textvariable=variable,width=width).pack(side='left',padx=(4,10))
+        ttk.Button(row,text='Speichern',command=self.save_device).pack(side='left')
+        row=ttk.Frame(parent);row.pack(fill='x')
+        self.target_btn=ttk.Button(row,text='Als Steuerziel übernehmen',command=self.use_selected_device,state='disabled')
+        self.target_btn.pack(side='left')
+        ttk.Button(row,text='Lokal entfernen',command=self.delete_device).pack(side='left',padx=6)
+        self.device_detail=tk.Text(parent,height=4,wrap='word',font=('Consolas',9),state='disabled')
+        self.device_detail.pack(fill='x',pady=(8,0))
+
+    def build_raw_ui(self,parent):
+        ttk.Label(parent,text='Pulsfolgen werden separat gesammelt. Ihre Signatur ist keine Geräte-ID; TIMING kann auch von bekannten Geräten stammen.',wraplength=1000).pack(anchor='w',pady=6)
+        self.raw_tree=ttk.Treeview(parent,columns=('source','pulses','count','seen'),show='headings',height=8)
+        for column,title in [('source','Quelle'),('pulses','Pegeldauern'),('count','Identische Aufnahmen'),('seen','Letzter Empfang')]:
+            self.raw_tree.heading(column,text=title)
+        self.raw_tree.pack(fill='both',expand=True)
+        self.raw_tree.bind('<<TreeviewSelect>>',self.select_raw_signal)
+        self.raw_detail=tk.Text(parent,height=9,wrap='word',font=('Consolas',9),state='disabled')
+        self.raw_detail.pack(fill='x',pady=8)
+        ttk.Button(parent,text='Gesamte Sitzung als JSONL exportieren',command=self.export).pack(anchor='w')
+
+    def toggle_scan(self):
+        if self.scanning:
+            self.stop_scan()
+            return
+        if not self.ready:
+            self.device_status.set('Bitte zuerst mit dem Mega verbinden.')
+            return
+        if self.registry_error:
+            self.device_status.set('Die bestehende Gerätedatei konnte nicht gelesen werden; sie wird nicht überschrieben. ' + self.registry_error)
+            return
+        seconds={'1 Minute':60,'5 Minuten':300,'15 Minuten':900,'Bis zum Stoppen':None}[self.scan_duration.get()]
+        self.scanning=True
+        self.scan_deadline=time.monotonic()+seconds if seconds else None
+        self.scan_btn.configure(text='Aufnahme beenden')
+        self.scan_options_changed()
+        self.device_status.set('Aufnahme aktiv: Neue decodierte Geräte werden lokal registriert. Sensoren senden oft nur in Intervallen.')
+
+    def scan_options_changed(self):
+        if self.scanning and self.ready:
+            self.send('10;RFDEBUG=OFF;')
+            self.send('10;QRFDEBUG=OFF;')
+            self.send('10;RFUDEBUG=' + ('ON;' if self.capture_raw.get() else 'OFF;'))
+            self.send('10;RFTIMING=' + ('ON;' if self.capture_raw.get() else 'OFF;'))
+
+    def stop_scan(self):
+        was_scanning=self.scanning
+        self.scanning=False
+        self.scan_deadline=None
+        self.scan_btn.configure(text='Aufnahme / Anlernen starten')
+        if was_scanning and self.ready:
+            self.send('10;RFUDEBUG=OFF;')
+            self.send('10;RFTIMING=OFF;')
+        self.flush_devices()
+        if was_scanning:
+            self.device_status.set('Aufnahme beendet. Bekannte Geräte werden bei Empfang weiter aktualisiert.')
+
+    def flush_devices(self):
+        if self.registry_error:
+            return False
+        try:
+            self.registry.save()
+            return True
+        except OSError as exc:
+            self.device_status.set('Lokales Speichern fehlgeschlagen: ' + str(exc))
+            return False
+
+    def housekeeping(self):
+        if self.closing:
+            return
+        if self.scanning and self.scan_deadline is not None:
+            remaining=max(0,int(self.scan_deadline-time.monotonic()))
+            if not remaining:
+                self.stop_scan()
+            else:
+                self.scan_btn.configure(text=f'Aufnahme beenden ({remaining} s)')
+        self.flush_devices()
+        self.root.after(1000,self.housekeeping)
+
+    def refresh_device_table(self):
+        search=self.device_filter.get().casefold()
+        visible=set()
+        for key,device in self.registry.devices.items():
+            values=measurement_text(device['fields'])
+            name=device.get('name') or device['protocol']
+            if device.get('room'):
+                name += ' / ' + device['room']
+            row=(name,device.get('type','Funk'),device['protocol'],device['device_id'],device['channel'] or '—',values,(device.get('last_seen') or '')[:19].replace('T',' '),device['count'])
+            if search and search not in ' '.join(map(str,row)).casefold():
+                continue
+            visible.add(key)
+            if self.device_tree.exists(key):
+                self.device_tree.item(key,values=row)
+            else:
+                self.device_tree.insert('', 'end',iid=key,values=row)
+        for key in self.device_tree.get_children():
+            if key not in visible:
+                self.device_tree.delete(key)
+        if not self.device_tree.selection():
+            self.target_btn.configure(state='disabled')
+
+    def selected_device(self):
+        selection=self.device_tree.selection()
+        if selection:
+            return selection[0],self.registry.devices.get(selection[0])
+        return None,None
+
+    @staticmethod
+    def set_text(widget,text):
+        widget.configure(state='normal');widget.delete('1.0','end');widget.insert('1.0',text);widget.configure(state='disabled')
+
+    def select_device(self,_=None):
+        key,device=self.selected_device()
+        if not device:
+            return
+        self.edit_name.set(device.get('name',''))
+        self.edit_room.set(device.get('room',''))
+        self.edit_notes.set(device.get('notes',''))
+        frame=Frame(device['protocol'],device['device_id'],device['channel'],device['fields'],device.get('raw',''))
+        self.target_btn.configure(state='normal' if control_target(frame) else 'disabled')
+        text='Felder: '+json.dumps(device['fields'],ensure_ascii=False)+'\n'+device.get('raw','')
+        text+='\nMesswert-Zeitstempel: '+json.dumps(device.get('field_seen',{}),ensure_ascii=False)
+        if device['protocol'].casefold()=='htr008w':
+            text='HTR: 000001 ist ein lokaler Profilalias, keine entschlüsselte Geräte-ID.\n'+text
+        self.set_text(self.device_detail,text)
+
+    def save_device(self):
+        key,device=self.selected_device()
+        if not device:
+            self.device_status.set('Zuerst ein Gerät in der Liste auswählen.')
+            return
+        self.registry.rename(key,self.edit_name.get(),self.edit_room.get(),self.edit_notes.get())
+        saved=self.flush_devices();self.refresh_device_table()
+        if saved:self.device_status.set('Name, Raum und Notiz lokal gespeichert.')
+
+    def delete_device(self):
+        key,device=self.selected_device()
+        if device and messagebox.askyesno('Lokal entfernen','Dieses Gerät aus der lokalen Liste entfernen? Bei laufender Aufnahme kann es erneut erscheinen.'):
+            del self.registry.devices[key];self.registry.dirty=True
+            self.flush_devices();self.refresh_device_table()
+            self.set_text(self.device_detail,'')
+
+    def use_selected_device(self):
+        key,device=self.selected_device()
+        if not device:
+            return
+        target=control_target(Frame(device['protocol'],device['device_id'],device['channel'],device['fields'],''))
+        if not target:
+            self.device_status.set('Für diesen Sensor oder dieses Protokoll sind keine Rollladen-Sendetasten vorgesehen.')
+            return
+        for name,value in target.items():
+            getattr(self,name).set(value)
+        self.profile_name.set(device.get('name') or device['protocol'])
+        self.tabs.select(self.control_tab)
+
+    def select_raw_signal(self,_=None):
+        selection=self.raw_tree.selection()
+        if selection:
+            self.set_text(self.raw_detail,self.raw_signals[selection[0]]['raw'])
+
+    def export_devices(self):
+        destination=filedialog.asksaveasfilename(defaultextension='.json',initialfile='rflink_devices_export.json',filetypes=[('JSON','*.json')])
+        if destination:
+            try:
+                Path(destination).write_text(json.dumps({'version':1,'devices':self.registry.devices},ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+            except OSError as exc:
+                messagebox.showerror('Export',str(exc))
+
+    def receive_device(self,raw,timestamp):
+        frame=parse_frame(raw)
+        if frame:
+            self.latest_frame=frame
+            target=control_target(frame)
+            if target:
+                self.last_received=target
+                self.profile_status.set('Gerät empfangen: '+str(target))
+            is_new=frame.key not in self.registry.devices
+            device=self.registry.observe(frame,timestamp,allow_new=self.scanning)
+            if device:
+                self.refresh_device_table()
+                if is_new:
+                    self.flush_devices()
+            return
+        if self.scanning and self.capture_raw.get():
+            signal=raw_signal(raw)
+            if signal:
+                key=signal['signature']
+                if key not in self.raw_signals and len(self.raw_signals)>=200:
+                    oldest=next(iter(self.raw_signals));del self.raw_signals[oldest];self.raw_tree.delete(oldest)
+                signal['count']=self.raw_signals.get(key,{}).get('count',0)+1
+                self.raw_signals[key]=signal
+                values=(signal['source'],signal['pulses'],signal['count'],timestamp[11:19])
+                if self.raw_tree.exists(key):self.raw_tree.item(key,values=values)
+                else:self.raw_tree.insert('', 'end',iid=key,values=values)
+
     def restore_settings(self):
         try:
-            values = json.loads((ROOT / 'rflink_test_settings.json').read_text(encoding='utf-8'))
+            values = json.loads((self.storage_dir / 'rflink_test_settings.json').read_text(encoding='utf-8'))
             for name in ('port_var', 'protocol', 'device_id', 'channel'):
                 if name in values:
                     getattr(self, name).set(values[name])
             self.profiles = values.get('profiles', {})
+            if not isinstance(self.profiles,dict):self.profiles={}
             self.profile_box['values'] = list(self.profiles)
+            if not self.registry_error:
+                for name,target in self.profiles.items():
+                    try:
+                        control_command(target['protocol'],target['device_id'],target['channel'],'STOP')
+                        protocol='ShutterRemote40' if target['protocol']=='Nobily' else 'HTR008W'
+                        channel=f"{0x40+int(target['channel']):02X}" if protocol=='ShutterRemote40' else '00'
+                        frame=Frame(protocol,target['device_id'],channel,{},'')
+                        device=self.registry.register(frame)
+                        if not device.get('name'):device['name']=name
+                    except (KeyError,TypeError,ValueError):
+                        continue
             if self.protocol.get() not in ('Nobily', 'HTR008W'):
                 self.protocol.set('Nobily')
                 self.protocol_changed()
@@ -246,12 +522,13 @@ class App:
         self.stop_job = None
 
     def use_received(self):
-        if self.last_received:
-            for key, value in self.last_received.items():
+        target=control_target(self.latest_frame) if self.latest_frame else None
+        if target:
+            for key, value in target.items():
                 getattr(self, key).set(value)
             self.profile_status.set('Empfangenes Geraet uebernommen; einen Namen vergeben und lokal speichern.')
         else:
-            self.profile_status.set('Zuerst eine Taste einer unterstuetzten Fernbedienung druecken.')
+            self.profile_status.set('Der letzte Empfang ist kein unterstütztes Steuerziel. Sensoren im Reiter Geräte zuordnen.')
 
     def save_profile(self):
         name = self.profile_name.get().strip()
@@ -263,6 +540,12 @@ class App:
             self.profile_status.set(str(exc))
             return
         self.profiles[name] = {key: getattr(self, key).get() for key in ('protocol', 'device_id', 'channel')}
+        if not self.registry_error:
+            protocol='ShutterRemote40' if self.protocol.get()=='Nobily' else 'HTR008W'
+            channel=f'{0x40+int(self.channel.get()):02X}' if protocol=='ShutterRemote40' else '00'
+            device=self.registry.register(Frame(protocol,self.device_id.get(),channel,{},''))
+            device['name']=name;self.registry.dirty=True
+            self.flush_devices();self.refresh_device_table()
         self.profile_box['values'] = list(self.profiles)
         self.write_settings()
         self.profile_status.set('Zuordnung auf dem Laptop gespeichert: ' + name)
@@ -274,34 +557,32 @@ class App:
     def write_settings(self):
         values = {name: getattr(self, name).get() for name in ('port_var', 'protocol', 'device_id', 'channel')}
         values['profiles'] = self.profiles
-        (ROOT / 'rflink_test_settings.json').write_text(json.dumps(values, indent=2), encoding='utf-8')
+        self.storage_dir.mkdir(parents=True,exist_ok=True)
+        (self.storage_dir / 'rflink_test_settings.json').write_text(json.dumps(values, indent=2), encoding='utf-8')
 
     def append(self, direction, raw):
         record = {'time': datetime.now().astimezone().isoformat(), 'label': self.label.get(), 'direction': direction, 'raw': raw}
         self.records.append(record)
+        try:
+            if self.session_path is None:
+                folder=self.storage_dir / 'testprogramm_logs';folder.mkdir(parents=True,exist_ok=True)
+                self.session_path=folder / ('session_'+datetime.now().strftime('%Y%m%d_%H%M%S_%f')+'.jsonl')
+            with self.session_path.open('a',encoding='utf-8') as handle:
+                handle.write(json.dumps(record,ensure_ascii=False)+'\n')
+        except OSError as exc:
+            self.device_status.set('Sitzungsmitschnitt konnte nicht gespeichert werden: '+str(exc))
         self.log.configure(state='normal')
         self.log.insert('end', f'{record["time"][11:19]} {direction.upper():4} {raw}\n')
+        if int(self.log.index('end-1c').split('.')[0])>1500:
+            self.log.delete('1.0','101.0')
         self.log.see('end')
         self.log.configure(state='disabled')
         if direction == 'rx':
-            parts = raw.split(';')
-            fields = dict(part.split('=', 1) for part in parts if '=' in part)
-            try:
-                brand = parts[2]
-                channel = int(fields['SWITCH'], 16)
-                if brand == 'ShutterRemote40' and 0x40 <= channel <= 0x45:
-                    self.last_received = {'protocol':'Nobily', 'device_id':fields['ID'], 'channel':str(channel - 0x40)}
-                elif brand == 'HTR008W' and fields['ID'] == '000001' and channel == 0:
-                    self.last_received = {'protocol':'HTR008W', 'device_id':'000001', 'channel':'0'}
-                else:
-                    return
-                self.profile_status.set('Geraet empfangen: ' + str(self.last_received))
-            except (IndexError, KeyError, ValueError):
-                pass
+            self.receive_device(raw,record['time'])
 
     def poll(self):
         try:
-            while True:
+            for _ in range(200):
                 kind, value = self.events.get_nowait()
                 if kind == 'connected':
                     self.ready = True
@@ -322,12 +603,15 @@ class App:
             self.root.after(100, self.poll)
 
     def disconnect(self):
+        self.stop_scan()
         self.cancel_stop()
         if self.stop_command:
             self.send(self.stop_command)
         self.stop_command = None
         if self.ready:
             self.send('10;RFDEBUG=OFF;')
+            self.send('10;RFUDEBUG=OFF;')
+            self.send('10;RFTIMING=OFF;')
         port, self.port = self.port, None
         self.ready = False
         if port:
@@ -340,16 +624,18 @@ class App:
     def export(self):
         destination = filedialog.asksaveasfilename(defaultextension='.jsonl', initialfile='rflink_test.jsonl', filetypes=[('JSONL', '*.jsonl')])
         if destination:
-            Path(destination).write_text(''.join(json.dumps(r, ensure_ascii=False) + '\n' for r in self.records), encoding='utf-8')
+            try:
+                if self.session_path and self.session_path.exists():
+                    if Path(destination).resolve()!=self.session_path.resolve():shutil.copy2(self.session_path,destination)
+                else:
+                    Path(destination).write_text(''.join(json.dumps(r,ensure_ascii=False)+'\n' for r in self.records),encoding='utf-8')
+            except OSError as exc:
+                messagebox.showerror('Export',str(exc))
 
     def close(self):
         self.closing = True
         self.disconnect()
         self.write_settings()
-        if self.records:
-            folder = ROOT / 'testprogramm_logs'
-            folder.mkdir(exist_ok=True)
-            (folder / ('session_' + datetime.now().strftime('%Y%m%d_%H%M%S') + '.jsonl')).write_text(''.join(json.dumps(r, ensure_ascii=False) + '\n' for r in self.records), encoding='utf-8')
         self.root.destroy()
 
 if __name__ == '__main__':
