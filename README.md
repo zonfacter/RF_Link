@@ -55,6 +55,8 @@ node firmware/tests/test_iobroker_bridge.js
 
 Die Tests verwenden echte Pulsaufzeichnungen. Der Nobily-Test prüft zusätzlich alle 65.536 Kombinationen aus Kanal- und Befehlsbyte. Der HTR-Test verwendet das zuvor erzeugte C++-Testprogramm. GUI-Tests benötigen Tkinter und eine Desktop-Sitzung.
 
+Die [Beschreibung der Rohdaten](firmware/RAW_DATEN.md) erklärt Pulslisten, `RFDEBUG` gegenüber `RFTIMING`, den Nobily-Telegrammaufbau und die bestätigten HTR-Muster einschließlich der noch offenen Felder.
+
 Node.js-20/22/24-Prüfungen und die automatischen Adaptertests liegen im [Adapter-Fork](https://github.com/zonfacter/ioBroker.rflink/actions).
 
 ## Lizenzen
