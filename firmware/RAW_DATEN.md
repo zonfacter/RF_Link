@@ -1,6 +1,6 @@
 # Rohdaten und Telegrammaufbau
 
-Stand: BUILD 0A / REV 33, 12.10.2026. Diese Beschreibung folgt den Decodern [ShutterRemote40.h](include/ShutterRemote40.h), [HTR008W.h](include/HTR008W.h) und den aufgezeichneten Hardwaretests. Bestätigte Beobachtungen und noch offene Protokollfelder sind getrennt beschrieben.
+Stand: BUILD 0B / REV 33, 12.10.2026. Diese Beschreibung folgt den Decodern [ShutterRemote40.h](include/ShutterRemote40.h), [HTR008W.h](include/HTR008W.h) und den aufgezeichneten Hardwaretests. Bestätigte Beobachtungen und noch offene Protokollfelder sind getrennt beschrieben.
 
 ## 1. Was eine Pulsaufzeichnung enthält
 
@@ -173,6 +173,22 @@ Die Sendemuster stehen als feste, zuvor beobachtete Profile im Firmware-Quellcod
 Die [beschriftete Aufnahme](hardware-tests/capture_20261012_201834.jsonl) enthält UP, STOP und DOWN. Der HTR-Capturetest prüft die passenden Rahmen aus direkten und historischen Zeitprofilen.
 
 ## 5. Aufzeichnungsdateien lesen
+
+### Ergänzung BUILD 0B: BL999 / TFA-TwinPlus-Sensorfamilie
+
+Die aufgezeichneten vollständigen 74-Puls-Rahmen ergeben beide das 36-Bit-Wort `140BB0DD5`. Der neue [BL999-Decoder](include/BL999.h) prüft die Pulsbreiten, die feste Kennung und eine Vier-Bit-Nibbelsumme. [Plugin 086](legacy/Plugins/Plugin_086.c) fordert zusätzlich zwei gleiche gültige Rahmen innerhalb von zwei Sekunden und unterdrückt unmittelbare Wiederholungen.
+
+Die Datenstruktur dieser Sensorfamilie und die LSB-Bitreihenfolge sind im [rtl_433-Decoder für TFA TwinPlus / BL999](https://github.com/merbanan/rtl_433/blob/master/src/devices/tfa_twin_plus_30.3049.c) beschrieben. Unsere Implementierung verwendet die direkt gemessenen Zeiten: HIGH etwa 380 µs, LOW etwa 1890 bzw. 3960 µs. Die historischen DEBUG-Zeiten sind dafür zu groß; Plugin 086 nutzt `RealPulseWidths` auch bei ausgeschaltetem RFTIMING.
+
+Das empfangene Wort liefert Sensor-ID `08`, Rohkanal `1`, Temperatur `22,1 °C`, Feuchte `31 %` und Batterie OK. Dies beschreibt die Sensorfamilie, bestätigt aber keinen bestimmten Herstelleraufdruck des entfernten Geräts. Die vollständigen Pulsaufzeichnungen liegen als [Testfixture](tests/bl999_measured_pulses.json) vor.
+
+```text
+20;01;BL999;ID=0108;CHAN=1;TEMP=00DD;HUM=31;BAT=OK;
+```
+
+Für gewöhnliche RFLink-Clients kombiniert `ID` den Rohkanal im oberen Byte mit der sechs Bit großen Sensor-ID im unteren Byte: `(Kanal << 8) | Sensor-ID`. `CHAN` erhält den Rohkanal separat. Die Sensor-ID kann sich nach einem Batteriewechsel ändern. Teilrahmen mit 20, 22, 30, 32 oder 34 Pegeldauern werden nicht als vollständige Geräte-Meldung angenommen.
+
+Die lokale Geräteübersicht nimmt nur decodierte Meldungen mit ID auf. `DEBUG` und `TIMING` allein enthalten keine solche Zuordnung und werden im Reiter Rohsignale gesammelt. Ein Empfangszähler in der Geräteansicht macht diesen Unterschied sichtbar.
 
 Die JSONL-Dateien enthalten pro Zeile ein JSON-Objekt:
 

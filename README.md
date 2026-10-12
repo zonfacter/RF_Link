@@ -1,6 +1,6 @@
 # RFLink: Mega-Firmware und Windows-Testprogramm
 
-Firmware BUILD **0A / REV 33** für Arduino Mega 2560 und 433 MHz. Das Projekt ergänzt den vorhandenen RFLink-Quellstand um das getestete Nobily/Brel-Protokoll und ein HTR008W-Fernbedienungsprofil.
+Firmware-Quellstand BUILD **0B / REV 33** für Arduino Mega 2560 und 433 MHz. Das Projekt ergänzt den vorhandenen RFLink-Quellstand um Nobily/Brel, ein HTR008W-Fernbedienungsprofil und einen BL999/TFA-TwinPlus-Sensor-Decoder.
 
 ## Windows starten
 
@@ -40,8 +40,9 @@ Den Port an den eigenen Mega anpassen und das Testprogramm vor dem Upload schlie
 | --- | --- | --- |
 | Nobily / Brel | `ShutterRemote40`, Empfang/Senden am Motor getestet | Echte 24-Bit-ID; `41`–`45` für Kanal 1–5, `40` für alle Kanäle |
 | HTR008W | Empfang/Senden des getesteten Profils | `000001` ist ein lokaler Alias; allgemeine Geräte-ID noch nicht entschlüsselt |
+| BL999 / TFA TwinPlus | Sensor-Empfang mit Prüfsumme und zwei gleichen Rahmen | 6-Bit-Sensor-ID und Rohkanal; RFLink-ID kombiniert beide |
 
-Die Firmware decodiert und sendet Telegramme. Namen, Räume und Gerätezuordnungen liegen extern. BUILD 0A verwendet keinen zusätzlichen EEPROM-Lernspeicher. Weitere Geräte desselben unterstützten Protokolls können extern zugeordnet werden; unbekannte Protokolle benötigen einen Decoder. HTR-Unterstützung gilt bisher für das aufgezeichnete Profil.
+Die Firmware decodiert und sendet Telegramme. Namen, Räume und Gerätezuordnungen liegen extern. Die Firmware verwendet keinen zusätzlichen EEPROM-Lernspeicher. Weitere Geräte desselben unterstützten Protokolls können extern zugeordnet werden; unbekannte Protokolle benötigen einen Decoder. HTR-Unterstützung gilt bisher für das aufgezeichnete Profil.
 
 ## ioBroker
 
@@ -58,6 +59,7 @@ Mit Python 3 und `g++` (bei Bedarf über `CXX` konfigurieren):
 ```powershell
 python firmware/tests/run_capture_tests.py
 python firmware/tests/run_htr_capture_tests.py
+python firmware/tests/run_bl999_capture_tests.py
 .venv-test\Scripts\python.exe firmware/tests/test_testprogramm.py
 python firmware/tests/test_device_registry.py
 node firmware/tests/test_iobroker.js

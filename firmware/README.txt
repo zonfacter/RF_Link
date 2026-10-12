@@ -2,7 +2,7 @@ RFLink fuer Arduino Mega 2560 / 433 MHz
 
 PlatformIO-Projekt: dieser Ordner; Environment mega2560.
 In VS Code den uebergeordneten RFLink.code-workspace oeffnen.
-Seriell: 57600 Baud, LF. Quellstand BUILD 0A, REV 33.
+Seriell: 57600 Baud, LF. Quellstand BUILD 0B, REV 33.
 Build: platformio run -d firmware (vom uebergeordneten Ordner).
 
 Quelle: Arbeitskopie von C:/Entwicklung/RFLink mit lokalen Aenderungen.
@@ -27,6 +27,11 @@ Sendepulszeiten wurden anhand echter Messungen korrigiert und am Motor getestet.
 Tests: tests/run_capture_tests.py, tests/run_htr_capture_tests.py,
 tests/test_iobroker.js, tests/test_iobroker_bridge.js, tests/test_testprogramm.py.
 Hardware-Mitschnitte und dokumentierte Motorreaktionen: hardware-tests.
-BUILD 0A ist auf beiden Megas installiert (COM4 und nach Geraetetausch COM3).
-Beide Flash-Uploads verifiziert, VERSION/PING OK. Aktueller Laptop-Port: COM3.
+Verworfener Lernversuch: experiments/retired-eeprom-learning, nicht eingebunden.
+BUILD 0B ist auf dem Laptop-Mega COM3 installiert: Flash verifiziert, VERSION/PING OK.
+Der Mega am ioBroker-Rechner wurde zuvor auf BUILD 0A aktualisiert.
 Ausfuehrliche Bedienung und Einschraenkungen: ../RFLink_Bedienung.txt.
+
+Plugin 086: BL999/TFA-TwinPlus-Empfang mit physikalischen Pulszeiten,
+Nibbelsumme und zwei gleichen gueltigen Rahmen vor der Ausgabe.
+Sensor-Test: tests/run_bl999_capture_tests.py.

@@ -57,6 +57,8 @@ class App:
         self.scanning = False
         self.scan_deadline = None
         self.raw_signals = {}
+        self.scan_raw_count = 0
+        self.scan_decoded_count = 0
         self.latest_frame = None
         self.port_var = tk.StringVar(value='COM3')
         self.status = tk.StringVar(value='Nicht verbunden · 57600 Baud')
@@ -75,6 +77,7 @@ class App:
         self.capture_raw = tk.BooleanVar(value=False)
         self.device_filter = tk.StringVar()
         self.device_status = tk.StringVar(value='Aufnahme starten, um neue Geräte lokal zu erfassen. Bekannte Geräte aktualisieren sich bei Empfang.')
+        self.activity_status = tk.StringVar(value='Noch keine Aufnahme: Geräte benötigen decodierte Meldungen mit ID.')
         self.edit_name = tk.StringVar()
         self.edit_room = tk.StringVar()
         self.edit_notes = tk.StringVar()
@@ -113,6 +116,7 @@ class App:
         self.control_tab = ttk.Frame(self.tabs, padding=10)
         log_tab = ttk.Frame(self.tabs, padding=10)
         raw_tab = ttk.Frame(self.tabs, padding=10)
+        self.raw_tab = raw_tab
         for frame, title in ((device_tab,'Geräte / Aufnahme'),(self.control_tab,'Steuern'),(log_tab,'Serielles Protokoll'),(raw_tab,'Rohsignale')):
             self.tabs.add(frame,text=title)
         self.build_devices_ui(device_tab)
@@ -181,6 +185,9 @@ class App:
         ttk.Checkbutton(row,text='Rohsignale mit aufnehmen',variable=self.capture_raw,command=self.scan_options_changed).pack(side='left')
         ttk.Button(row,text='Geräteliste exportieren',command=self.export_devices).pack(side='right')
         ttk.Label(parent,textvariable=self.device_status,wraplength=1010).pack(anchor='w',pady=8)
+        row=ttk.Frame(parent);row.pack(fill='x',pady=(0,6))
+        ttk.Label(row,textvariable=self.activity_status,wraplength=800).pack(side='left')
+        ttk.Button(row,text='Rohsignale ansehen',command=lambda:self.tabs.select(self.raw_tab)).pack(side='right')
         row = ttk.Frame(parent)
         row.pack(fill='x',pady=(0,6))
         ttk.Label(row,text='Suchen').pack(side='left')
@@ -237,10 +244,19 @@ class App:
             return
         seconds={'1 Minute':60,'5 Minuten':300,'15 Minuten':900,'Bis zum Stoppen':None}[self.scan_duration.get()]
         self.scanning=True
+        self.scan_raw_count=0
+        self.scan_decoded_count=0
         self.scan_deadline=time.monotonic()+seconds if seconds else None
         self.scan_btn.configure(text='Aufnahme beenden')
         self.scan_options_changed()
         self.device_status.set('Aufnahme aktiv: Neue decodierte Geräte werden lokal registriert. Sensoren senden oft nur in Intervallen.')
+        self.update_activity_status()
+
+    def update_activity_status(self):
+        text=f'{self.scan_decoded_count} decodierte Meldungen · {self.scan_raw_count} Rohaufnahmen · {len(self.registry.devices)} gespeicherte Geräte'
+        if self.scan_raw_count and not self.scan_decoded_count:
+            text+=' — Funk wird empfangen, aber noch kein Gerät decodiert. Siehe Rohsignale.'
+        self.activity_status.set(text)
 
     def scan_options_changed(self):
         if self.scanning and self.ready:
@@ -375,6 +391,9 @@ class App:
     def receive_device(self,raw,timestamp):
         frame=parse_frame(raw)
         if frame:
+            if self.scanning:
+                self.scan_decoded_count+=1
+                self.update_activity_status()
             self.latest_frame=frame
             target=control_target(frame)
             if target:
@@ -386,10 +405,13 @@ class App:
                 self.refresh_device_table()
                 if is_new:
                     self.flush_devices()
+                    self.update_activity_status()
             return
         if self.scanning and self.capture_raw.get():
             signal=raw_signal(raw)
             if signal:
+                self.scan_raw_count+=1
+                self.update_activity_status()
                 key=signal['signature']
                 if key not in self.raw_signals and len(self.raw_signals)>=200:
                     oldest=next(iter(self.raw_signals));del self.raw_signals[oldest];self.raw_tree.delete(oldest)

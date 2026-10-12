@@ -1,4 +1,4 @@
-#define BUILDNR                         0x0A                                    // shown in version
+#define BUILDNR                         0x0B                                    // shown in version
 #define REVNR                           0x33                                    // shown in version and startup string
 #define MIN_RAW_PULSES                    20                                    // =8 bits. Minimal number of bits*2 that need to have been received before we spend CPU time on decoding the signal.
 #define RAWSIGNAL_SAMPLE_RATE             30                                    // Sample width / resolution in uSec for raw RF pulses.

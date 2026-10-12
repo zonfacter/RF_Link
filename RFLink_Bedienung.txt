@@ -1,5 +1,5 @@
 RFLink - Bedienung und externe Gerätezuordnung
-Stand: 12.10.2026; Firmware BUILD 0A, REV 33
+Stand: 12.10.2026; Firmware-Quellstand BUILD 0B, REV 33
 
 ARCHITEKTUR
 Die Firmware decodiert unterstützte Funktelegramme und liefert Protokoll,
@@ -90,3 +90,13 @@ Motorreaktionen für Nobily und HTR wurden direkt getestet; Nachweise stehen
 unter firmware/hardware-tests. Die Motorreaktion über die neuen direkten
 ioBroker-Tasten ist noch separat zu bestätigen.
 Adaptertests auf Node 20, 22 und 24 sowie Neustarttest bestanden.
+
+BL999 / TFA-TWINPLUS AB BUILD 0B
+Plugin 086 erkennt vollstaendige 74-Puls-Rahmen anhand direkt gemessener Zeiten.
+Zwei gleiche Rahmen und eine gueltige Nibbelsumme werden verlangt.
+ID kombiniert Rohkanal und Sensor-ID; CHAN gibt den Rohkanal separat aus.
+Die analysierten Aufnahmen liefern ID=0108, CHAN=1, 22.1 Grad C und 31 Prozent.
+Der Laptop-Mega COM3 hat BUILD 0B; der andere Mega am ioBroker-Rechner
+ist noch auf dem zuvor installierten BUILD 0A.
+Rohsignal-Empfang allein bedeutet noch keine decodierte Geraetemeldung.
+Der Aufnahmezaehler und die Schaltflaeche Rohsignale zeigen diesen Unterschied.

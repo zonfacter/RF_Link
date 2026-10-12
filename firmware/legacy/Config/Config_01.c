@@ -124,3 +124,6 @@
 // Learned HTR008W fingerprints from the live hardware recordings.
 #define PLUGIN_085
 #define PLUGIN_TX_085
+
+// TFA TwinPlus / BL999 weather sensor, validated physical timing and checksum.
+#define PLUGIN_086

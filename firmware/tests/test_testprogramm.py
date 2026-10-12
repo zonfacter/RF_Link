@@ -88,6 +88,8 @@ class TestProgram(unittest.TestCase):
             self.assertEqual(len(app.raw_signals),1)
             self.assertEqual(next(iter(app.raw_signals.values()))['count'],2)
             self.assertEqual(len(app.registry.devices),0)
+            self.assertEqual(app.scan_raw_count,2)
+            self.assertIn('noch kein Gerät decodiert',app.activity_status.get())
             self.assertIn('10;RFUDEBUG=ON;',sent)
             self.assertIn('10;RFTIMING=ON;',sent)
             app.scan_deadline=time.monotonic()-1
