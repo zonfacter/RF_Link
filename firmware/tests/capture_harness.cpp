@@ -39,7 +39,8 @@ void delayMicroseconds(unsigned duration) { if (dataWritten) emitted.push_back(d
 void noInterrupts() {}
 void interrupts() {}
 void RFLinkHW() {}
-unsigned long millis() { return 1234; }
+unsigned long testNowMs = 1234;
+unsigned long millis() { return testNowMs; }
 #include "../legacy/Plugins/Plugin_084.c"
 #define PLUGIN_085
 #define PLUGIN_TX_085
@@ -150,4 +151,5 @@ int main(int argc, char **) {
                       << std::setw(2) << unsigned(frame.command) << '\n';
         } else std::cout << "REJECT\n";
     }
+    return 0;
 }

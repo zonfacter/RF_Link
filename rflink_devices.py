@@ -93,6 +93,14 @@ def device_type(frame):
     return 'Sensor / Funk'
 
 
+def device_measurement_text(device):
+    fields = dict(device['fields'])
+    if fields.get('CMD') == 'UNKNOWN' and device.get('last_known_command'):
+        fields.pop('CMD')
+        return measurement_text(fields) + ' | Letzter bekannter Befehl: ' + device['last_known_command'] + ' (unbekanntes Folgetelegramm)'
+    return measurement_text(fields)
+
+
 class DeviceRegistry:
     def __init__(self, filename):
         self.filename = Path(filename)
@@ -140,6 +148,10 @@ class DeviceRegistry:
             device['first_seen'] = timestamp
         device['count'] += 1
         device['last_seen'] = timestamp
+        command = frame.fields.get('CMD')
+        if command and command != 'UNKNOWN':
+            device['last_known_command'] = command
+            device['last_known_command_at'] = timestamp
         device['fields'].update(frame.fields)
         device.setdefault('field_seen',{}).update({name:timestamp for name in frame.fields})
         device['raw'] = frame.raw

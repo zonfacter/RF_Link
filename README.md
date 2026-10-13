@@ -1,6 +1,6 @@
 # RFLink: Mega-Firmware und Windows-Testprogramm
 
-Firmware-Quellstand BUILD **0B / REV 33** für Arduino Mega 2560 und 433 MHz. Das Projekt ergänzt den vorhandenen RFLink-Quellstand um Nobily/Brel, ein HTR008W-Fernbedienungsprofil und einen BL999/TFA-TwinPlus-Sensor-Decoder.
+Firmware-Quellstand BUILD **0D / REV 33** für Arduino Mega 2560 und 433 MHz. Das Projekt ergänzt den vorhandenen RFLink-Quellstand um Nobily/Brel, ein HTR008W-Fernbedienungsprofil und einen BL999/TFA-TwinPlus-Sensor-Decoder.
 
 ## Windows starten
 
@@ -60,6 +60,7 @@ Mit Python 3 und `g++` (bei Bedarf über `CXX` konfigurieren):
 python firmware/tests/run_capture_tests.py
 python firmware/tests/run_htr_capture_tests.py
 python firmware/tests/run_bl999_capture_tests.py
+python firmware/tests/run_clipped_nobily_tests.py
 .venv-test\Scripts\python.exe firmware/tests/test_testprogramm.py
 python firmware/tests/test_device_registry.py
 node firmware/tests/test_iobroker.js
@@ -75,3 +76,7 @@ Node.js-20/22/24-Prüfungen und die automatischen Adaptertests liegen im [Adapte
 ## Lizenzen
 
 Die Firmware basiert auf dem lokalen Quellstand aus [jwdb/rflink](https://github.com/jwdb/rflink). Copyright-Hinweise, Quellheader und `firmware/legacy/License.txt` bleiben erhalten; deren Bedingungen gelten für diese Bestandteile. Die ioBroker-Parser-Testdateien behalten ihre MIT-Lizenz. Dieses Repository erklärt die ursprünglichen Bestandteile nicht pauschal als MIT-lizenziert.
+
+## BUILD 0D: Nobily-Empfang
+
+Vollstaendige 40-Bit-Daten mit fehlendem Start-/Sync-Paar (80 Pulse) werden nach zwei gleichen Telegrammen innerhalb von zwei Sekunden erkannt. Verkuerzte Startpulse bei 82-Puls-Telegrammen sind ebenfalls unterstuetzt. Kanal 42 wurde live mit UP, STOP und DOWN bestaetigt. Die Rohkommandos 1E/3C bleiben UNKNOWN; das Testprogramm bewahrt den letzten bekannten Befehl mit Zeitstempel separat. Details und reproduzierbare Aufnahmen: `firmware/tests/nobily_missing_sync.md`.

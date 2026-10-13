@@ -4,9 +4,26 @@ import sys
 import tempfile
 import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
-from rflink_devices import DeviceRegistry, parse_frame, measurement_text, control_target, raw_signal
+from rflink_devices import DeviceRegistry, parse_frame, measurement_text, control_target, raw_signal, device_measurement_text
 
 class RegistryTests(unittest.TestCase):
+    def test_unknown_followup_keeps_known_command_separate(self):
+        with tempfile.TemporaryDirectory() as folder:
+            registry=DeviceRegistry(Path(folder)/'devices.json')
+            up=parse_frame('20;01;ShutterRemote40;ID=98461A;SWITCH=41;RAW=11;CMD=UP;')
+            registry.observe(up,'t1',allow_new=True)
+            followup=parse_frame('20;02;ShutterRemote40;ID=98461A;SWITCH=41;RAW=1E;CMD=UNKNOWN;')
+            device=registry.observe(followup,'t2')
+            self.assertEqual(len(registry.devices),1)
+            self.assertEqual(device['fields']['CMD'],'UNKNOWN')
+            self.assertEqual(device['fields']['RAW'],'1E')
+            self.assertEqual(device['last_known_command'],'UP')
+            self.assertEqual(device['last_known_command_at'],'t1')
+            self.assertIn('Letzter bekannter Befehl: UP',device_measurement_text(device))
+            registry.save()
+            restored=DeviceRegistry(registry.filename);restored.load()
+            self.assertEqual(restored.devices[up.key]['last_known_command'],'UP')
+
     def test_signed_temperature_and_sensor_fields(self):
         frame=parse_frame('20;12;Cresta;ID=4D02;TEMP=00c9;HUM=57;BAT=OK;\r')
         self.assertIn('20.1 °C',measurement_text(frame.fields))

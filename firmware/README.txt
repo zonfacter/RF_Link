@@ -2,7 +2,7 @@ RFLink fuer Arduino Mega 2560 / 433 MHz
 
 PlatformIO-Projekt: dieser Ordner; Environment mega2560.
 In VS Code den uebergeordneten RFLink.code-workspace oeffnen.
-Seriell: 57600 Baud, LF. Quellstand BUILD 0B, REV 33.
+Seriell: 57600 Baud, LF. Quellstand BUILD 0D, REV 33.
 Build: platformio run -d firmware (vom uebergeordneten Ordner).
 
 Quelle: Arbeitskopie von C:/Entwicklung/RFLink mit lokalen Aenderungen.
@@ -35,3 +35,9 @@ Ausfuehrliche Bedienung und Einschraenkungen: ../RFLink_Bedienung.txt.
 Plugin 086: BL999/TFA-TwinPlus-Empfang mit physikalischen Pulszeiten,
 Nibbelsumme und zwei gleichen gueltigen Rahmen vor der Ausgabe.
 Sensor-Test: tests/run_bl999_capture_tests.py.
+
+BUILD 0D: Nobily mit verkurztem Startpuls bzw. fehlendem Start-/Sync-Paar.
+80-Puls-Daten benoetigen zwei identische Telegramme innerhalb von 2000 ms.
+Kanal 42 live mit UP/STOP/DOWN bestaetigt; RAW 1E/3C bleiben UNKNOWN.
+Siehe tests/nobily_missing_sync.md und run_clipped_nobily_tests.py.
+Laptop-Mega: BUILD 0D installiert und verifiziert; ioBroker-Mega unveraendert.

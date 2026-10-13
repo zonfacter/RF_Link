@@ -205,3 +205,9 @@ Das Beispiel ist gekürzt. `time` ist die Host-Zeit mit Zeitzone; `label` ist di
 | [capture_20261012_203317.jsonl](hardware-tests/capture_20261012_203317.jsonl) | Spätere HTR- und Nobily-Kanalversuche |
 
 Für neue Protokollanalysen mehrere kurze Tastendrücke je Taste und Kanal getrennt beschriften, direkte Zeiten aufnehmen und wiederholte Rahmen vergleichen. Unbekannte Abschnitte zunächst offen lassen. Fremdsignale, abgeschnittene Header und Aufnahme-Timeouts nicht als gesicherte Protokollfelder behandeln.
+
+## Nobily-Ergaenzung BUILD 0C/0D
+
+Der Empfaenger kann den Startpuls verkuerzen oder das Start-/Sync-Paar ganz verlieren. BUILD 0C akzeptiert bei vollstaendigen 82-Puls-Telegrammen einen Startpuls ab 150 us. BUILD 0D prueft zusaetzlich 80-Puls-Telegramme mit allen 40 Datenpaaren und Schlussluecke. Ohne Sync werden nur Kanalbytes 40..45 und die beobachteten Rohkommandos 11/33/55/1E/3C akzeptiert; zwei gleiche Rahmen innerhalb von 2000 ms sind erforderlich. Andere unvollstaendige Rahmen bleiben ungueltig.
+
+Am 13.10.2026 wurden Kanal 42 UP, STOP und DOWN live bestaetigt. Im selben Test folgt RAW 1E auf UP und RAW 3C auf DOWN. Dies beweist noch keine allgemeine Bedeutung der Folgetelegramme; CMD bleibt UNKNOWN. Die lokale Geraeteverwaltung speichert `last_known_command` und dessen Zeitstempel separat vom letzten Rohtelegramm.

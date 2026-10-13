@@ -11,7 +11,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import serial
 from serial.tools import list_ports
-from rflink_devices import DeviceRegistry, Frame, parse_frame, control_target, measurement_text, raw_signal
+from rflink_devices import DeviceRegistry, Frame, parse_frame, control_target, measurement_text, raw_signal, device_measurement_text
 
 ROOT = Path(__file__).resolve().parent
 BUTTONS = {'HOCH': 'UP', 'STOP': 'STOP', 'RUNTER': 'DOWN'}
@@ -303,7 +303,7 @@ class App:
         search=self.device_filter.get().casefold()
         visible=set()
         for key,device in self.registry.devices.items():
-            values=measurement_text(device['fields'])
+            values=device_measurement_text(device)
             name=device.get('name') or device['protocol']
             if device.get('room'):
                 name += ' / ' + device['room']

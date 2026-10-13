@@ -6,7 +6,21 @@
 boolean Plugin_084(byte, char *) {
     ShutterRemote40::Frame frame;
     if (!ShutterRemote40::decode(RawSignal.Pulses + 1, RawSignal.Number,
-                                 RawSignal.Multiply, frame)) return false;
+                                 RawSignal.Multiply, frame)) {
+        if (!ShutterRemote40::decodeClipped(RawSignal.Pulses + 1, RawSignal.Number,
+                                           RawSignal.Multiply, frame)) return false;
+        static bool haveCandidate = false;
+        static ShutterRemote40::Frame candidate;
+        static unsigned long candidateAt = 0;
+        const unsigned long now = millis();
+        const bool confirmed = haveCandidate && candidate.id == frame.id &&
+            candidate.channelByte == frame.channelByte && candidate.command == frame.command &&
+            (now - candidateAt) <= 2000;
+        candidate = frame;
+        candidateAt = now;
+        haveCandidate = true;
+        if (!confirmed) return false;
+    }
     snprintf_P(pbuffer, sizeof(pbuffer),
         PSTR("20;%02X;ShutterRemote40;ID=%06lX;"), PKSequenceNumber++, (unsigned long)frame.id);
     Serial.print(pbuffer);

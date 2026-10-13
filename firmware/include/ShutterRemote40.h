@@ -24,7 +24,9 @@ inline bool decode(const uint8_t *pulses, size_t count, uint8_t scale, Frame &fr
     const uint16_t sync = uint16_t(pulses[1]) * scale;
     const bool physical = between(sync, 1200, 1800);
     if (!physical && !between(sync, 2200, 2600)) return false;
-    if (!between(uint16_t(pulses[0]) * scale, physical ? 150 : 300, physical ? 5500 : 1300) ||
+    // The receiver can clip the startup mark: complete October captures start
+    // at 210/240/270 us in legacy DEBUG. Still validate sync and all data pairs.
+    if (!between(uint16_t(pulses[0]) * scale, 150, physical ? 5500 : 1300) ||
         !between(uint16_t(pulses[81]) * scale, physical ? 3800 : 5000, 7650)) return false;
     const uint16_t shortMin = physical ? 180 : 300;
     const uint16_t shortMax = physical ? 420 : 650;
@@ -49,6 +51,24 @@ inline bool decode(const uint8_t *pulses, size_t count, uint8_t scale, Frame &fr
     frame.channelByte = uint8_t(tail >> 8);
     frame.command = uint8_t(tail);
     return true;
+}
+
+// Some receiver captures contain all 40 data pairs, but no startup/sync pair.
+// Only accept the observed channel/command family; callers must confirm repeats.
+inline bool decodeClipped(const uint8_t *pulses, size_t count, uint8_t scale, Frame &frame) {
+    if (count != 80 || scale != 30) return false;
+    uint8_t full[82];
+    full[0] = 300 / scale;
+    for (size_t i = 0; i < 80; ++i) full[i + 2] = pulses[i];
+    const uint16_t syncs[] = {1470, 2310};
+    bool valid = false;
+    for (uint8_t i = 0; i < 2; ++i) {
+        full[1] = syncs[i] / scale;
+        if (decode(full, 82, scale, frame)) { valid = true; break; }
+    }
+    if (!valid || frame.channelByte < 0x40 || frame.channelByte > 0x45) return false;
+    return frame.command == 0x11 || frame.command == 0x33 || frame.command == 0x55 ||
+           frame.command == 0x1E || frame.command == 0x3C;
 }
 
 inline bool encode(const Frame &frame, uint8_t *pulses, size_t capacity, uint8_t scale) {

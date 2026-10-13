@@ -9,6 +9,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 EXPECTED = {
+    'firmware/tests/nobily_clipped_start.jsonl': {'98461A4211': 1, '98461A4411': 1, '98461A431E': 1},
     '10xdown_ch3_QRFDebug_PluginOff.csv': {'98461A4433': 10, '98461A443C': 10},
     '10xdown_ch4_QRFDebug_PluginOff.csv': {'98461A4455': 10},
     '10xstop_ch3_QRFDebug_PluginOff.csv': {'98461A4333': 10, '98461A433C': 9},
